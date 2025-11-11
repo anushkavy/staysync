@@ -83,7 +83,7 @@ export default function OwnerLogin() {
             needsHostel: true,
           })
         );
-        router.push("/add-hostel");
+        router.push("/addhostel");
       }
       setIsLoading(false);
     }, 1000);
