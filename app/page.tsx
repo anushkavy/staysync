@@ -1,5 +1,7 @@
 import { User01, Building01 } from "@untitledui/icons";
 import Link from "next/link";
+import Image from "next/image";
+import logo from "@/app/assets/logo.svg";
 
 export default function Home() {
   return (
@@ -7,6 +9,15 @@ export default function Home() {
       <div className="w-full max-w-4xl">
         {/* Header */}
         <div className="text-center mb-12">
+          <Link href="/" className="inline-block mb-6">
+            <Image
+              src={logo}
+              alt="StaySync Logo"
+              width={120}
+              height={120}
+              className="mx-auto hover:scale-105 transition-transform"
+            />
+          </Link>
           <h1 className="text-4xl md:text-5xl font-bold text-[#1b4332] mb-4">
             StaySync
           </h1>

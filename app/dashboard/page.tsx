@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Home01, Tool01, LogOut01, User01 } from "@untitledui/icons";
 import Utensil from "@/app/assets/utensils.svg";
 import Image from "next/image";
+import Link from "next/link";
+import logo from "@/app/assets/logo.svg";
 
 type TabType = "rooms" | "meals" | "maintenance";
 
@@ -67,7 +69,16 @@ export default function ResidentDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-[#1b4332]">StaySync</h1>
+              <Link href="/" className="flex items-center">
+                <Image
+                  src={logo}
+                  alt="StaySync"
+                  width={32}
+                  height={32}
+                  className="mr-2"
+                />
+                <h1 className="text-2xl font-bold text-[#1b4332]">StaySync</h1>
+              </Link>
               <span className="ml-4 text-gray-600">Resident Dashboard</span>
             </div>
             <div className="flex items-center space-x-4">
