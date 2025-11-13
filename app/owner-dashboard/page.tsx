@@ -32,6 +32,25 @@ interface MaintenanceRequest {
   date: string;
 }
 
+interface MenuItem {
+  id: string;
+  name: string;
+  description: string;
+  photo?: string;
+  category: "breakfast" | "lunch" | "dinner" | "snacks";
+}
+
+interface MealSlot {
+  id: string;
+  menuItemId: string;
+  date: string;
+  mealType: "breakfast" | "lunch" | "dinner" | "snacks";
+  totalSlots: number;
+  bookedSlots: number;
+  ownerEmail: string;
+  hostelName: string;
+}
+
 export default function OwnerDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>("rooms");
@@ -137,7 +156,7 @@ export default function OwnerDashboard() {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === "rooms" && <RoomManagementTab user={user} />}
-        {activeTab === "meals" && <MealManagementTab />}
+        {activeTab === "meals" && <MealManagementTab user={user} />}
         {activeTab === "maintenance" && (
           <MaintenanceManagementTab user={user} />
         )}
@@ -327,22 +346,527 @@ function RoomManagementTab({ user }: { user: any }) {
 }
 
 // Meal Management Tab Component
-function MealManagementTab() {
+function MealManagementTab({ user }: { user: any }) {
+  const [activeView, setActiveView] = useState<"menu" | "schedule">("menu");
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [mealSlots, setMealSlots] = useState<MealSlot[]>([]);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [showScheduleMeal, setShowScheduleMeal] = useState(false);
+
+  useEffect(() => {
+    // Load menu items
+    const items = JSON.parse(localStorage.getItem("menuItems") || "[]");
+    setMenuItems(items);
+
+    // Load meal slots for this owner
+    const slots = JSON.parse(localStorage.getItem("mealSlots") || "[]");
+    const mySlots = slots.filter(
+      (slot: MealSlot) => slot.ownerEmail === user.email
+    );
+    setMealSlots(mySlots);
+  }, [user.email]);
+
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-[#1b4332]">Meal Management</h2>
-      <div className="bg-white rounded-lg p-8 shadow-sm border border-[#a1cca5]/20 text-center">
-        <Image
-          src={Utensil}
-          alt="Utensil"
-          className="w-16 h-16 text-[#a1cca5] mx-auto mb-4"
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-[#1b4332]">Meal Management</h2>
+        <div className="flex space-x-3">
+          <button
+            onClick={() => setActiveView("menu")}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              activeView === "menu"
+                ? "bg-[#1b4332] text-white"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+            }`}
+          >
+            Menu Items
+          </button>
+          <button
+            onClick={() => setActiveView("schedule")}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              activeView === "schedule"
+                ? "bg-[#1b4332] text-white"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+            }`}
+          >
+            Schedule Meals
+          </button>
+        </div>
+      </div>
+
+      {activeView === "menu" && (
+        <MenuItemsView
+          menuItems={menuItems}
+          setMenuItems={setMenuItems}
+          showAddItem={showAddItem}
+          setShowAddItem={setShowAddItem}
         />
-        <h3 className="text-lg font-semibold text-[#1b4332] mb-2">
-          Coming Soon
+      )}
+
+      {activeView === "schedule" && (
+        <ScheduleMealsView
+          menuItems={menuItems}
+          mealSlots={mealSlots}
+          setMealSlots={setMealSlots}
+          user={user}
+          showScheduleMeal={showScheduleMeal}
+          setShowScheduleMeal={setShowScheduleMeal}
+        />
+      )}
+    </div>
+  );
+}
+
+// Menu Items View Component
+function MenuItemsView({
+  menuItems,
+  setMenuItems,
+  showAddItem,
+  setShowAddItem,
+}: {
+  menuItems: MenuItem[];
+  setMenuItems: (items: MenuItem[]) => void;
+  showAddItem: boolean;
+  setShowAddItem: (show: boolean) => void;
+}) {
+  const defaultItems: MenuItem[] = [
+    {
+      id: "1",
+      name: "Aloo Paratha",
+      description: "Stuffed potato flatbread with butter",
+      category: "breakfast",
+    },
+    {
+      id: "2",
+      name: "Poha",
+      description: "Flattened rice with vegetables and spices",
+      category: "breakfast",
+    },
+    {
+      id: "3",
+      name: "Dal Rice",
+      description: "Lentil curry with steamed rice",
+      category: "lunch",
+    },
+    {
+      id: "4",
+      name: "Rajma Chawal",
+      description: "Kidney bean curry with rice",
+      category: "lunch",
+    },
+    {
+      id: "5",
+      name: "Roti Sabzi",
+      description: "Indian bread with vegetable curry",
+      category: "dinner",
+    },
+    {
+      id: "6",
+      name: "Samosa",
+      description: "Crispy fried pastry with spiced filling",
+      category: "snacks",
+    },
+  ];
+
+  useEffect(() => {
+    if (menuItems.length === 0) {
+      setMenuItems(defaultItems);
+      localStorage.setItem("menuItems", JSON.stringify(defaultItems));
+    }
+  }, []);
+
+  const handleAddItem = (newItem: Omit<MenuItem, "id">) => {
+    const item: MenuItem = {
+      ...newItem,
+      id: Date.now().toString(),
+    };
+    const updatedItems = [...menuItems, item];
+    setMenuItems(updatedItems);
+    localStorage.setItem("menuItems", JSON.stringify(updatedItems));
+    setShowAddItem(false);
+  };
+
+  const categories = ["breakfast", "lunch", "dinner", "snacks"] as const;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h3 className="text-xl font-semibold text-[#1b4332]">Menu Items</h3>
+        <button
+          onClick={() => setShowAddItem(true)}
+          className="bg-[#1b4332] text-white px-4 py-2 rounded-lg hover:bg-[#1b4332]/90 transition-colors"
+        >
+          <Plus className="w-4 h-4 inline mr-2" />
+          Add Item
+        </button>
+      </div>
+
+      {categories.map((category) => (
+        <div
+          key={category}
+          className="bg-white rounded-lg p-6 shadow-sm border border-[#a1cca5]/20"
+        >
+          <h4 className="text-lg font-semibold text-[#1b4332] mb-4 capitalize">
+            {category}
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {menuItems
+              .filter((item) => item.category === category)
+              .map((item) => (
+                <div
+                  key={item.id}
+                  className="border border-[#a1cca5]/20 rounded-lg p-4"
+                >
+                  <h5 className="font-medium text-[#1b4332]">{item.name}</h5>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {item.description}
+                  </p>
+                </div>
+              ))}
+          </div>
+        </div>
+      ))}
+
+      {showAddItem && (
+        <AddMenuItemModal
+          onAdd={handleAddItem}
+          onClose={() => setShowAddItem(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Add Menu Item Modal
+function AddMenuItemModal({
+  onAdd,
+  onClose,
+}: {
+  onAdd: (item: Omit<MenuItem, "id">) => void;
+  onClose: () => void;
+}) {
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    category: "breakfast" as MenuItem["category"],
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (formData.name.trim() && formData.description.trim()) {
+      onAdd(formData);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <h3 className="text-lg font-semibold text-[#1b4332] mb-4">
+          Add Menu Item
         </h3>
-        <p className="text-gray-600">
-          Meal management features will be available soon.
-        </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-[#1b4332] mb-2">
+              Item Name
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+              className="w-full px-3 py-2 border border-[#a1cca5]/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a1cca5]"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#1b4332] mb-2">
+              Description
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
+              className="w-full px-3 py-2 border border-[#a1cca5]/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a1cca5]"
+              rows={3}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#1b4332] mb-2">
+              Category
+            </label>
+            <select
+              value={formData.category}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  category: e.target.value as MenuItem["category"],
+                })
+              }
+              className="w-full px-3 py-2 border border-[#a1cca5]/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a1cca5]"
+            >
+              <option value="breakfast">Breakfast</option>
+              <option value="lunch">Lunch</option>
+              <option value="dinner">Dinner</option>
+              <option value="snacks">Snacks</option>
+            </select>
+          </div>
+          <div className="flex space-x-3">
+            <button
+              type="submit"
+              className="flex-1 bg-[#1b4332] text-white py-2 rounded-lg hover:bg-[#1b4332]/90 transition-colors"
+            >
+              Add Item
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Schedule Meals View Component
+function ScheduleMealsView({
+  menuItems,
+  mealSlots,
+  setMealSlots,
+  user,
+  showScheduleMeal,
+  setShowScheduleMeal,
+}: {
+  menuItems: MenuItem[];
+  mealSlots: MealSlot[];
+  setMealSlots: (slots: MealSlot[]) => void;
+  user: any;
+  showScheduleMeal: boolean;
+  setShowScheduleMeal: (show: boolean) => void;
+}) {
+  const handleScheduleMeal = (
+    mealData: Omit<MealSlot, "id" | "bookedSlots" | "ownerEmail" | "hostelName">
+  ) => {
+    const newSlot: MealSlot = {
+      ...mealData,
+      id: Date.now().toString(),
+      bookedSlots: 0,
+      ownerEmail: user.email,
+      hostelName: user.hostel?.name || "Unknown Hostel",
+    };
+
+    const allSlots = JSON.parse(localStorage.getItem("mealSlots") || "[]");
+    allSlots.push(newSlot);
+    localStorage.setItem("mealSlots", JSON.stringify(allSlots));
+
+    const updatedMySlots = [...mealSlots, newSlot];
+    setMealSlots(updatedMySlots);
+    setShowScheduleMeal(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h3 className="text-xl font-semibold text-[#1b4332]">
+          Scheduled Meals
+        </h3>
+        <button
+          onClick={() => setShowScheduleMeal(true)}
+          className="bg-[#1b4332] text-white px-4 py-2 rounded-lg hover:bg-[#1b4332]/90 transition-colors"
+        >
+          <Plus className="w-4 h-4 inline mr-2" />
+          Schedule Meal
+        </button>
+      </div>
+
+      {mealSlots.length === 0 ? (
+        <div className="bg-white rounded-lg p-8 shadow-sm border border-[#a1cca5]/20 text-center">
+          <Image
+            src={Utensil}
+            alt="Utensil"
+            className="w-16 h-16 text-[#a1cca5] mx-auto mb-4"
+          />
+          <h3 className="text-lg font-semibold text-[#1b4332] mb-2">
+            No Meals Scheduled
+          </h3>
+          <p className="text-gray-600">Schedule meals for your residents.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {mealSlots.map((slot) => {
+            const menuItem = menuItems.find(
+              (item) => item.id === slot.menuItemId
+            );
+            return (
+              <div
+                key={slot.id}
+                className="bg-white rounded-lg p-6 shadow-sm border border-[#a1cca5]/20"
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="text-lg font-semibold text-[#1b4332]">
+                      {menuItem?.name || "Unknown Item"}
+                    </h4>
+                    <p className="text-gray-600">{menuItem?.description}</p>
+                    <div className="mt-2 text-sm text-gray-500">
+                      <p>Date: {slot.date}</p>
+                      <p>Meal Type: {slot.mealType}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-lg font-semibold text-[#1b4332]">
+                      {slot.bookedSlots}/{slot.totalSlots}
+                    </span>
+                    <p className="text-sm text-gray-600">Booked/Total</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showScheduleMeal && (
+        <ScheduleMealModal
+          menuItems={menuItems}
+          onSchedule={handleScheduleMeal}
+          onClose={() => setShowScheduleMeal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Schedule Meal Modal
+function ScheduleMealModal({
+  menuItems,
+  onSchedule,
+  onClose,
+}: {
+  menuItems: MenuItem[];
+  onSchedule: (
+    meal: Omit<MealSlot, "id" | "bookedSlots" | "ownerEmail" | "hostelName">
+  ) => void;
+  onClose: () => void;
+}) {
+  const [formData, setFormData] = useState({
+    menuItemId: "",
+    date: "",
+    mealType: "breakfast" as MealSlot["mealType"],
+    totalSlots: 10,
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (formData.menuItemId && formData.date && formData.totalSlots > 0) {
+      onSchedule(formData);
+    }
+  };
+
+  const today = new Date().toISOString().split("T")[0];
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <h3 className="text-lg font-semibold text-[#1b4332] mb-4">
+          Schedule Meal
+        </h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-[#1b4332] mb-2">
+              Menu Item
+            </label>
+            <select
+              value={formData.menuItemId}
+              onChange={(e) =>
+                setFormData({ ...formData, menuItemId: e.target.value })
+              }
+              className="w-full px-3 py-2 border border-[#a1cca5]/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a1cca5]"
+              required
+            >
+              <option value="">Select an item</option>
+              {menuItems.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name} ({item.category})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#1b4332] mb-2">
+              Date
+            </label>
+            <input
+              type="date"
+              value={formData.date}
+              onChange={(e) =>
+                setFormData({ ...formData, date: e.target.value })
+              }
+              min={today}
+              className="w-full px-3 py-2 border border-[#a1cca5]/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a1cca5]"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#1b4332] mb-2">
+              Meal Type
+            </label>
+            <select
+              value={formData.mealType}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  mealType: e.target.value as MealSlot["mealType"],
+                })
+              }
+              className="w-full px-3 py-2 border border-[#a1cca5]/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a1cca5]"
+            >
+              <option value="breakfast">Breakfast</option>
+              <option value="lunch">Lunch</option>
+              <option value="dinner">Dinner</option>
+              <option value="snacks">Snacks</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#1b4332] mb-2">
+              Total Slots
+            </label>
+            <input
+              type="number"
+              value={formData.totalSlots}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  totalSlots: parseInt(e.target.value) || 0,
+                })
+              }
+              min="1"
+              className="w-full px-3 py-2 border border-[#a1cca5]/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a1cca5]"
+              required
+            />
+          </div>
+          <div className="flex space-x-3">
+            <button
+              type="submit"
+              className="flex-1 bg-[#1b4332] text-white py-2 rounded-lg hover:bg-[#1b4332]/90 transition-colors"
+            >
+              Schedule
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

@@ -34,6 +34,15 @@ export default function OwnerLogin() {
     return Object.keys(newErrors).length === 0;
   };
 
+  const handleInputChange = (field: string, value: string) => {
+    setFormData({ ...formData, [field]: value });
+
+    // Clear error for this field when user starts typing
+    if (errors[field]) {
+      setErrors({ ...errors, [field]: "" });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -120,9 +129,7 @@ export default function OwnerLogin() {
                 type="email"
                 id="email"
                 value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
+                onChange={(e) => handleInputChange("email", e.target.value)}
                 className={`w-full px-4 py-3 rounded-lg border ${
                   errors.email ? "border-red-500" : "border-[#a1cca5]/30"
                 } focus:outline-none focus:ring-2 focus:ring-[#a1cca5] focus:border-transparent`}
@@ -146,7 +153,7 @@ export default function OwnerLogin() {
                   id="password"
                   value={formData.password}
                   onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
+                    handleInputChange("password", e.target.value)
                   }
                   className={`w-full px-4 py-3 rounded-lg border ${
                     errors.password ? "border-red-500" : "border-[#a1cca5]/30"

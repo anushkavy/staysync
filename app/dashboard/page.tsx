@@ -34,6 +34,33 @@ interface MaintenanceRequest {
   date: string;
 }
 
+interface MenuItem {
+  id: string;
+  name: string;
+  description: string;
+  photo?: string;
+  category: "breakfast" | "lunch" | "dinner" | "snacks";
+}
+
+interface MealSlot {
+  id: string;
+  menuItemId: string;
+  date: string;
+  mealType: "breakfast" | "lunch" | "dinner" | "snacks";
+  totalSlots: number;
+  bookedSlots: number;
+  ownerEmail: string;
+  hostelName: string;
+}
+
+interface MealBooking {
+  id: string;
+  residentEmail: string;
+  residentName: string;
+  mealSlotId: string;
+  bookedAt: string;
+}
+
 export default function ResidentDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>("rooms");
@@ -146,7 +173,7 @@ export default function ResidentDashboard() {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === "rooms" && <RoomBookingTab user={user} />}
-        {activeTab === "meals" && <MealPlanningTab />}
+        {activeTab === "meals" && <MealPlanningTab user={user} />}
         {activeTab === "maintenance" && <MaintenanceTab user={user} />}
       </div>
     </div>
@@ -365,23 +392,276 @@ function RoomBookingTab({ user }: { user: any }) {
 }
 
 // Meal Planning Tab Component
-function MealPlanningTab() {
+function MealPlanningTab({ user }: { user: any }) {
+  const [availableMeals, setAvailableMeals] = useState<
+    (MealSlot & { menuItem: MenuItem })[]
+  >([]);
+  const [myBookings, setMyBookings] = useState<
+    (MealBooking & { mealSlot: MealSlot; menuItem: MenuItem })[]
+  >([]);
+
+  useEffect(() => {
+    // Get all meal slots
+    const allSlots = JSON.parse(localStorage.getItem("mealSlots") || "[]");
+    const menuItems = JSON.parse(localStorage.getItem("menuItems") || "[]");
+
+    // Filter future meals only
+    const now = new Date();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+    const today = now.toISOString().split("T")[0];
+
+    const futureMeals = allSlots.filter((slot: MealSlot) => {
+      const slotDate = new Date(slot.date);
+      const slotDay = slot.date;
+
+      // If it's today, check if the meal time hasn't passed
+      if (slotDay === today) {
+        const mealTimes = {
+          breakfast: 10 * 60, // 10:00 AM
+          lunch: 14 * 60, // 2:00 PM
+          snacks: 17 * 60, // 5:00 PM
+          dinner: 21 * 60, // 9:00 PM
+        };
+        return currentTime < mealTimes[slot.mealType];
+      }
+
+      // For future dates, include all meals
+      return slotDate > now;
+    });
+
+    // Add menu item details
+    const mealsWithItems = futureMeals
+      .map((slot: MealSlot) => ({
+        ...slot,
+        menuItem: menuItems.find(
+          (item: MenuItem) => item.id === slot.menuItemId
+        ),
+      }))
+      .filter((meal: MenuItem & { menuItem: MenuItem }) => meal.menuItem);
+
+    setAvailableMeals(mealsWithItems);
+
+    // Get my bookings
+    const allBookings = JSON.parse(
+      localStorage.getItem("mealBookings") || "[]"
+    );
+    const myMealBookings = allBookings.filter(
+      (booking: MealBooking) => booking.residentEmail === user.email
+    );
+
+    const bookingsWithDetails = myMealBookings
+      .map((booking: MealBooking) => {
+        const mealSlot = allSlots.find(
+          (slot: MealSlot) => slot.id === booking.mealSlotId
+        );
+        const menuItem = menuItems.find(
+          (item: MenuItem) => item.id === mealSlot?.menuItemId
+        );
+        return {
+          ...booking,
+          mealSlot,
+          menuItem,
+        };
+      })
+      .filter(
+        (booking: MealBooking & { mealSlot: MealSlot; menuItem: MenuItem }) =>
+          booking.mealSlot && booking.menuItem
+      );
+
+    setMyBookings(bookingsWithDetails);
+  }, [user.email]);
+
+  const handleBookMeal = (mealSlot: MealSlot) => {
+    // Check if already booked
+    const alreadyBooked = myBookings.some(
+      (booking) => booking.mealSlotId === mealSlot.id
+    );
+    if (alreadyBooked) {
+      alert("You have already booked this meal!");
+      return;
+    }
+
+    // Check if slots available
+    if (mealSlot.bookedSlots >= mealSlot.totalSlots) {
+      alert("No slots available for this meal!");
+      return;
+    }
+
+    // Create booking
+    const newBooking: MealBooking = {
+      id: Date.now().toString(),
+      residentEmail: user.email,
+      residentName: user.name,
+      mealSlotId: mealSlot.id,
+      bookedAt: new Date().toISOString(),
+    };
+
+    // Update bookings
+    const allBookings = JSON.parse(
+      localStorage.getItem("mealBookings") || "[]"
+    );
+    allBookings.push(newBooking);
+    localStorage.setItem("mealBookings", JSON.stringify(allBookings));
+
+    // Update meal slot booked count
+    const allSlots = JSON.parse(localStorage.getItem("mealSlots") || "[]");
+    const updatedSlots = allSlots.map((slot: MealSlot) =>
+      slot.id === mealSlot.id
+        ? { ...slot, bookedSlots: slot.bookedSlots + 1 }
+        : slot
+    );
+    localStorage.setItem("mealSlots", JSON.stringify(updatedSlots));
+
+    // Refresh data
+    window.location.reload();
+  };
+
+  const isBooked = (mealSlotId: string) => {
+    return myBookings.some((booking) => booking.mealSlotId === mealSlotId);
+  };
+
+  const groupMealsByDate = (meals: typeof availableMeals) => {
+    return meals.reduce((groups, meal) => {
+      const date = meal.date;
+      if (!groups[date]) {
+        groups[date] = [];
+      }
+      groups[date].push(meal);
+      return groups;
+    }, {} as Record<string, typeof availableMeals>);
+  };
+
+  const groupedMeals = groupMealsByDate(availableMeals);
+
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-[#1b4332]">Meal Planning</h2>
-      <div className="bg-white rounded-lg p-8 shadow-sm border border-[#a1cca5]/20 text-center">
-        <Image
-          src={Utensil}
-          alt="Utensil"
-          className="w-16 h-16 text-[#a1cca5] mx-auto mb-4"
-        />
-        <h3 className="text-lg font-semibold text-[#1b4332] mb-2">
-          Coming Soon
+
+      {/* Available Meals */}
+      <div>
+        <h3 className="text-xl font-semibold text-[#1b4332] mb-4">
+          Available Meals
         </h3>
-        <p className="text-gray-600">
-          Meal planning features will be available soon.
-        </p>
+
+        {Object.keys(groupedMeals).length === 0 ? (
+          <div className="bg-white rounded-lg p-8 shadow-sm border border-[#a1cca5]/20 text-center">
+            <Image
+              src={Utensil}
+              alt="Utensil"
+              className="w-16 h-16 text-[#a1cca5] mx-auto mb-4"
+            />
+            <h3 className="text-lg font-semibold text-[#1b4332] mb-2">
+              No Meals Available
+            </h3>
+            <p className="text-gray-600">No meals have been scheduled yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {Object.entries(groupedMeals).map(([date, meals]) => (
+              <div
+                key={date}
+                className="bg-white rounded-lg p-6 shadow-sm border border-[#a1cca5]/20"
+              >
+                <h4 className="text-lg font-semibold text-[#1b4332] mb-4">
+                  {new Date(date).toLocaleDateString("en-US", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                </h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {meals.map((meal) => (
+                    <div
+                      key={meal.id}
+                      className="border border-[#a1cca5]/20 rounded-lg p-4"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-xs font-medium text-[#1b4332] bg-[#a1cca5]/20 px-2 py-1 rounded-full capitalize">
+                          {meal.mealType}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {meal.bookedSlots}/{meal.totalSlots}
+                        </span>
+                      </div>
+
+                      <h5 className="font-semibold text-[#1b4332] mb-1">
+                        {meal.menuItem.name}
+                      </h5>
+                      <p className="text-sm text-gray-600 mb-3">
+                        {meal.menuItem.description}
+                      </p>
+                      <p className="text-xs text-gray-500 mb-3">
+                        {meal.hostelName}
+                      </p>
+
+                      {isBooked(meal.id) ? (
+                        <button
+                          disabled
+                          className="w-full bg-green-100 text-green-800 py-2 rounded-lg font-medium cursor-not-allowed"
+                        >
+                          Booked ✓
+                        </button>
+                      ) : meal.bookedSlots >= meal.totalSlots ? (
+                        <button
+                          disabled
+                          className="w-full bg-red-100 text-red-800 py-2 rounded-lg font-medium cursor-not-allowed"
+                        >
+                          Fully Booked
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleBookMeal(meal)}
+                          className="w-full bg-[#a1cca5] text-[#1b4332] py-2 rounded-lg font-medium hover:bg-[#a1cca5]/80 transition-colors"
+                        >
+                          Book Meal
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* My Bookings */}
+      {myBookings.length > 0 && (
+        <div>
+          <h3 className="text-xl font-semibold text-[#1b4332] mb-4">
+            My Meal Bookings
+          </h3>
+          <div className="space-y-3">
+            {myBookings.map((booking) => (
+              <div
+                key={booking.id}
+                className="bg-white rounded-lg p-4 shadow-sm border border-[#a1cca5]/20"
+              >
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h4 className="font-semibold text-[#1b4332]">
+                      {booking.menuItem.name}
+                    </h4>
+                    <p className="text-sm text-gray-600">
+                      {booking.mealSlot.hostelName} •{" "}
+                      {booking.mealSlot.mealType}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {new Date(booking.mealSlot.date).toLocaleDateString()} •
+                      Booked: {new Date(booking.bookedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
+                    Confirmed
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
