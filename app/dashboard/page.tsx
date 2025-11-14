@@ -399,18 +399,40 @@ function MealPlanningTab({ user }: { user: any }) {
   const [myBookings, setMyBookings] = useState<
     (MealBooking & { mealSlot: MealSlot; menuItem: MenuItem })[]
   >([]);
+  const [userHostel, setUserHostel] = useState<string | null>(null);
 
   useEffect(() => {
-    // Get all meal slots
+    // Check if user is enrolled in any hostel
+    const applications = JSON.parse(
+      localStorage.getItem("roomApplications") || "[]"
+    );
+    const approvedApplication = applications.find(
+      (app: RoomApplication) =>
+        app.residentEmail === user.email && app.status === "approved"
+    );
+
+    if (!approvedApplication) {
+      setUserHostel(null);
+      return;
+    }
+
+    setUserHostel(approvedApplication.hostelName);
+
+    // Get all meal slots for user's hostel only
     const allSlots = JSON.parse(localStorage.getItem("mealSlots") || "[]");
     const menuItems = JSON.parse(localStorage.getItem("menuItems") || "[]");
 
-    // Filter future meals only
+    // Filter future meals only for user's hostel
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
     const today = now.toISOString().split("T")[0];
 
     const futureMeals = allSlots.filter((slot: MealSlot) => {
+      // Only show meals from user's hostel
+      if (slot.hostelName !== approvedApplication.hostelName) {
+        return false;
+      }
+
       const slotDate = new Date(slot.date);
       const slotDay = slot.date;
 
@@ -441,7 +463,7 @@ function MealPlanningTab({ user }: { user: any }) {
 
     setAvailableMeals(mealsWithItems);
 
-    // Get my bookings
+    // Get my bookings for this hostel only
     const allBookings = JSON.parse(
       localStorage.getItem("mealBookings") || "[]"
     );
@@ -465,11 +487,36 @@ function MealPlanningTab({ user }: { user: any }) {
       })
       .filter(
         (booking: MealBooking & { mealSlot: MealSlot; menuItem: MenuItem }) =>
-          booking.mealSlot && booking.menuItem
+          booking.mealSlot &&
+          booking.menuItem &&
+          booking.mealSlot.hostelName === approvedApplication.hostelName
       );
 
     setMyBookings(bookingsWithDetails);
   }, [user.email]);
+
+  // Show not enrolled message if user is not part of any hostel
+  if (userHostel === null) {
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-[#1b4332]">Meal Planning</h2>
+
+        <div className="bg-white rounded-lg p-8 shadow-sm border border-[#a1cca5]/20 text-center">
+          <Image
+            src={Utensil}
+            alt="Utensil"
+            className="w-16 h-16 text-[#a1cca5] mx-auto mb-4"
+          />
+          <h3 className="text-lg font-semibold text-[#1b4332] mb-2">
+            You are not a part of a hostel/PG yet
+          </h3>
+          <p className="text-gray-600">
+            Please apply for a room and get approved to access meal planning.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const handleBookMeal = (mealSlot: MealSlot) => {
     // Check if already booked
@@ -535,7 +582,13 @@ function MealPlanningTab({ user }: { user: any }) {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-[#1b4332]">Meal Planning</h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-[#1b4332]">Meal Planning</h2>
+        <div className="text-sm text-gray-600">
+          Hostel:{" "}
+          <span className="font-medium text-[#1b4332]">{userHostel}</span>
+        </div>
+      </div>
 
       {/* Available Meals */}
       <div>
@@ -592,9 +645,6 @@ function MealPlanningTab({ user }: { user: any }) {
                       <p className="text-sm text-gray-600 mb-3">
                         {meal.menuItem.description}
                       </p>
-                      <p className="text-xs text-gray-500 mb-3">
-                        {meal.hostelName}
-                      </p>
 
                       {isBooked(meal.id) ? (
                         <button
@@ -645,7 +695,6 @@ function MealPlanningTab({ user }: { user: any }) {
                       {booking.menuItem.name}
                     </h4>
                     <p className="text-sm text-gray-600">
-                      {booking.mealSlot.hostelName} •{" "}
                       {booking.mealSlot.mealType}
                     </p>
                     <p className="text-xs text-gray-500">
